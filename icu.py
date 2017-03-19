@@ -4,7 +4,7 @@
 ## Date: 3.17.2017
 ## Description:  
 ##              
-## TODO: 1. find correct NORAD ID and calculation
+## TODO: 
 ##       
 #!/usr/bin/env python
 
@@ -17,6 +17,7 @@ import math
 import ephem
 import pygame
 from twilio.rest import TwilioRestClient 
+from datetime import datetime
 
 
 ''' define global variable here'''
@@ -28,6 +29,20 @@ password = 'BeichenL960430!'
 accountSID = "ACc8cb6ca47d0a8b36519bbd4180ab2a46"
 authToken = "b58beb2a4fd808e24d3b38741f130f8c"
 
+'''
+' function: getUTCTime()
+' parameter: None
+' return: time now.
+'''
+
+def getUTCTime():
+    return datetime.utcnow()
+
+'''
+' function: argvparser()
+' parameter: None
+' return: arguments as arg.zipcode and arg.NORAD.
+'''
 
 def argvparser(): # argument parser
     global arg
@@ -38,15 +53,26 @@ def argvparser(): # argument parser
                         help= "indicates NORAD ID of satellite to view")
     arg = parser.parse_args()
 
+'''
+' function: zip2cood()
+' parameter: zipcode ('24060')
+' return: latitude and longitude
+'''
 
-def ziptocood(zipcode):
+def zip2cood(zipcode):
     google_url = 'https://maps.googleapis.com/maps/api/geocode/json?address='+zipcode
     response = requests.get(google_url)
     resp_json = response.json()
-    global latitude, longitude 
     latitude = float( resp_json['results'][0]['geometry']['location']['lat'])
     longitude = float( resp_json['results'][0]['geometry']['location']['lng'])
     print "latitude: ", latitude,"longitude: ", longitude
+    return latitude, longitude 
+
+'''
+' function: getTLE()
+' parameter: None
+' return: TLE list
+'''
 
 def getTLE(NoradID):
     print "Connecting..."
@@ -60,30 +86,79 @@ def getTLE(NoradID):
 
     TLE = resp.read()
     print "---------------------------------TLE---------------------------------\n"
-#    print TLE
+#    print TLE 
+# uncomment when submit
     TLE_List = TLE.split('\n')
-    print(len(TLE_List))
-    calc(TLE_List[0],TLE_List[1])
+    print "--------------------------------Finsh-------------------------------\n"
     opener.close()
+#    return TLE_List
+    for i in xrange(0,len(TLE_List),2):
+        try: 
+            getSAT(TLE_List[i],TLE_List[i+1],'2017-03-18', '37','-80')
+        except:
+            print str(i)+' '+'Error'
+            continue
+
+
+
+'''
+' function: sun_below()
+' parameter: date('2017-03-18'), latitude, longitude
+' return: sunrise, sunset
+'''
+
+def sun_below(day, lati, longi):
+    obs = ephem.Observer()
+    obs.date = day
+    obs.lat = lati
+    obs.long = longi
+    m = ephem.Sun()
+
+    sunrise  = obs.previous_rising(m)
+    sunset = obs.next_setting(m)
+
+    return sunrise,sunset 
+
+'''
+' function: getSAT()
+' parameter: TLE1, TLE2, date('2017-03-18'), latitude, longitude
+' return: TR list, TS list
+'         TR is appearing time
+'         TS is disappearing time
+'''
     
-def calc(TLE1,TLE2):
+def getSAT(TLE1, TLE2, Date, latitude, longitude):
+    TR = []
+    TS = []
     iss = ephem.readtle("ISS (ZARYA)", TLE1, TLE2)
     obs = ephem.Observer()
-    obs.lat  = latitude
+    obs.date = Date
+    obs.lat = latitude
     obs.long = longitude
-    for p in range(3):
+    tr = obs.date
+    while tr != obs.next_pass(iss)[0]:
         tr, azr, tt, altt, ts, azs = obs.next_pass(iss)
-        while tr < ts :
-            obs.date = tr
-            iss.compute(obs)
-            print "%s %4.1f %5.1f" % (tr, math.degrees(iss.alt), math.degrees(iss.az))
-            tr = ephem.Date(tr + 60.0 * ephem.second)
-            print 
-            obs.date = tr + ephem.minute
+        TR.append(tr)
+        TS.append(ts)
+        obs.date = ts
+    return TR, TS
+'''
+' function: send_SMS()
+' parameter: _SMS_ (the content of the msg)
+' return: None
+'''
 
 def send_SMS(_SMS_):
     client = TwilioRestClient(accountSID, authToken) 
     client.messages.create(to="+15407509285", from_="+16173000913", body=_SMS_)
+
+'''
+' function: play_music()
+' parameter: None
+' return: None
+' Note: needs to configure continuous music playing 
+'       and music dir 
+'''
 
 def play_music():
     pygame.init()
@@ -94,8 +169,11 @@ def play_music():
 
 def main():
     argvparser()
-    ziptocood(arg.zipcode[0])
+    latitude,longitude = zip2cood(arg.zipcode[0])
     getTLE(arg.NORAD[0])
+    
 
-# main()
-play_music()
+main()
+
+
+
