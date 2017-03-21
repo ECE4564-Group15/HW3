@@ -2,22 +2,25 @@
 ## Name: icu.py
 ## Author: Beichen Liu
 ## Date: 3.17.2017
-## Description:  
-##              
-## TODO: 
-##       
-#!/usr/bin/env python
+## Description:
+##
+## TODO:
+##
+#!/usr/bin/env python3
 
 import argparse
 import googlemaps
-import urllib, urllib2, cookielib, requests
+import urllib, requests
 import datetime
 import sys,time
 import math
 import ephem
 import pygame
-from twilio.rest import TwilioRestClient 
-from datetime import datetime
+import json
+from twilio.rest import TwilioRestClient
+from datetime import datetime, timedelta
+from spacetrack import SpaceTrackClient
+
 
 
 ''' define global variable here'''
@@ -30,18 +33,18 @@ accountSID = "ACc8cb6ca47d0a8b36519bbd4180ab2a46"
 authToken = "b58beb2a4fd808e24d3b38741f130f8c"
 
 '''
-' function: getUTCTime()
-' parameter: None
-' return: time now.
+'   function: getUTCTime()
+'   parameter: None
+'   return: time now.
 '''
 
 def getUTCTime():
     return datetime.utcnow()
 
 '''
-' function: argvparser()
-' parameter: None
-' return: arguments as arg.zipcode and arg.NORAD.
+'   function: argvparser()
+'   parameter: None
+'   return: arguments as arg.zipcode and arg.NORAD.
 '''
 
 def argvparser(): # argument parser
@@ -54,19 +57,18 @@ def argvparser(): # argument parser
     arg = parser.parse_args()
 
 '''
-' function: zip2cood()
-' parameter: zipcode ('24060')
-' return: latitude and longitude
+'   function: zip2cood()
+'   parameter: zipcode ('24060')
+'   return: latitude and longitude
 '''
 
 def zip2cood(zipcode):
-    google_url = 'https://maps.googleapis.com/maps/api/geocode/json?address='+zipcode
+    google_url = ('https://maps.googleapis.com/maps/api/geocode/json?address={0}'.format(zipcode))
     response = requests.get(google_url)
     resp_json = response.json()
     latitude = float( resp_json['results'][0]['geometry']['location']['lat'])
     longitude = float( resp_json['results'][0]['geometry']['location']['lng'])
-    print "latitude: ", latitude,"longitude: ", longitude
-    return latitude, longitude 
+    return latitude, longitude
 
 '''
 ' function: getTLE()
@@ -75,29 +77,11 @@ def zip2cood(zipcode):
 '''
 
 def getTLE(NoradID):
-    print "Connecting..."
-    cj = cookielib.CookieJar()
-    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
-    parameters = urllib.urlencode({'identity': username ,'password': password})
-    opener.open(baseURL + '/ajaxauth/login', parameters)
-    queryString = baseURL +"/basicspacedata/query/class/tle/format/tle/NORAD_CAT_ID/"+NoradID+"\
-                  EPOCH/"+'2017-03-16'+"%2000:00:00--"+'2017-03-17'+"%2000:00:00"
-    resp = opener.open(queryString)
-
-    TLE = resp.read()
-    print "---------------------------------TLE---------------------------------\n"
-#    print TLE 
-# uncomment when submit
+    st = SpaceTrackClient(username,password)
+    TLE = st.tle_latest(norad_cat_id=[25544], ordinal=1, format='tle')
     TLE_List = TLE.split('\n')
-    print "--------------------------------Finsh-------------------------------\n"
-    opener.close()
-#    return TLE_List
-    for i in xrange(0,len(TLE_List),2):
-        try: 
-            getSAT(TLE_List[i],TLE_List[i+1],'2017-03-18', '37','-80')
-        except:
-            print str(i)+' '+'Error'
-            continue
+    return TLE_List
+
 
 
 
@@ -117,7 +101,7 @@ def sun_below(day, lati, longi):
     sunrise  = obs.previous_rising(m)
     sunset = obs.next_setting(m)
 
-    return sunrise,sunset 
+    return sunrise,sunset
 
 '''
 ' function: getSAT()
@@ -126,10 +110,8 @@ def sun_below(day, lati, longi):
 '         TR is appearing time
 '         TS is disappearing time
 '''
-    
+
 def getSAT(TLE1, TLE2, Date, latitude, longitude):
-    TR = []
-    TS = []
     iss = ephem.readtle("ISS (ZARYA)", TLE1, TLE2)
     obs = ephem.Observer()
     obs.date = Date
@@ -137,11 +119,35 @@ def getSAT(TLE1, TLE2, Date, latitude, longitude):
     obs.long = longitude
     tr = obs.date
     while tr != obs.next_pass(iss)[0]:
+        event = []
         tr, azr, tt, altt, ts, azs = obs.next_pass(iss)
-        TR.append(tr)
-        TS.append(ts)
+        sun = ephem.Sun()
+        sun.compute(obs)
+        iss.compute(obs)
+        sun_alt = math.degrees(sun.alt)
         obs.date = ts
-    return TR, TS
+        if math.degrees(sun_alt) < 0 : ## to be fixed
+            entry = {'tr': tr,
+                     'ts': ts,
+                     'lng': iss.sublong,
+                     'lat': iss.sublat}
+            event.append(entry)
+    return event
+'''
+' function: getWeather()
+' parameter: coordinate latitude/longitude
+' return: a list of weather in 15 days
+'''
+
+def getWeather(lati, lng):
+    cloud_list = []
+    url = ('http://api.openweathermap.org/data/2.5/forecast/daily?lat={0}&lon={1}&cnt=16&appid=8998a89b9499fc1c889f6f091304b984'.format(lati,lng))
+    ret = requests.get(url).json()
+    for i in range (0,14):
+        cloud_list.append(ret['list'][i]['clouds'])
+    return cloud_list
+
+
 '''
 ' function: send_SMS()
 ' parameter: _SMS_ (the content of the msg)
@@ -149,15 +155,15 @@ def getSAT(TLE1, TLE2, Date, latitude, longitude):
 '''
 
 def send_SMS(_SMS_):
-    client = TwilioRestClient(accountSID, authToken) 
+    client = TwilioRestClient(accountSID, authToken)
     client.messages.create(to="+15407509285", from_="+16173000913", body=_SMS_)
 
 '''
 ' function: play_music()
 ' parameter: None
 ' return: None
-' Note: needs to configure continuous music playing 
-'       and music dir 
+' Note: needs to configure continuous music playing
+'       and music dir
 '''
 
 def play_music():
@@ -165,15 +171,65 @@ def play_music():
     pygame.mixer.music.load("/usr/share/sounds/ubuntu/ringtones/Soul.ogg")
     pygame.mixer.music.play()
     time.sleep(10)
+'''
+'   function: viewable_Event()
+'   parameter: None
+'   return: viewable event list
+'''
 
+def viewable_Event():
+    TLE = []
+    List = []
+    T0 = getUTCTime()
+    vis = 0 # count clear sky day.
+    latitude, longitude = zip2cood(arg.zipcode)
+    TLE = getTLE(arg.NORAD)
+    wea = getWeather(latitude,longitude)
+
+    for i in range (0,14):
+        event = getSAT(TLE[0],TLE[1],T0+timedelta(days=i),latitude, longitude)
+        if wea[i] <20:
+            for j in range(len(event)):
+                vis +=1
+                List.append(event[j])
+        if vis == 5:
+            return List
+            break
+
+    return List
+  
 
 def main():
     argvparser()
-    latitude,longitude = zip2cood(arg.zipcode[0])
-    getTLE(arg.NORAD[0])
-    
+    L = []
+    print ("starting...")
+    L = viewable_Event()
+    latitude, longitude = zip2cood(arg.zipcode)
+    TLE = getTLE(arg.NORAD)
+    wea = getWeather(latitude,longitude)
+    print ("---------------------------------TLE---------------------------------\n")
 
+    print(TLE[0])
+    print(TLE[1], "\n")
+    print ("------------------------------coordinate-----------------------------\n")
+    print ("latitude: ", latitude, "longitude: ", longitude, "\n")
+    print ("----------------------------sky condition----------------------------\n") 
+    for i in range(0,14):
+        print(datetime.utcnow()+timedelta(days=i), "clouds", wea[i])   
+    if len(L) <5:
+        print ("\n")
+        print ("cannot find 5 viewable days")
+        print ("\n")
+    print ("==============Duration=====================latitude=======longitude==\n")
+    for li in L:
+        print (li['ts'],li['tr'],'\t', li['lat'],'\t', li['lng'])
+    print ("\n")
+
+'''
+def main():
+    while 1:
+        now = datetime.utcnow()
+        print(now)
+        time.sleep(1)
+'''
 main()
-
-
-
