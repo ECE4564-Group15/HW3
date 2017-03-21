@@ -4,12 +4,10 @@ Add icu.py
 
 TODO:
 
-1. calculate angle between sun and sat
+1. calculate angle between sun and sat + verify that viewable event works
 
-2. get weather
+2. notification before 15 min
 
-3. notification before 15 min
-
-4. connect to notifications
+3. connect to notifications
 
 
