@@ -4,19 +4,22 @@
 ## Date: 3.17.2017
 ## Description:
 ##
-## TODO:
-##
+## TODO: 1. validate that getSAT() works, fix it if you can
+##       2. fix the bug in main loop
+##       3. display the sat's data to fit validation requirement 4
+##       4. figure out if we need function sun_below()
 #!/usr/bin/env python3
 
 import argparse
 import googlemaps
 import urllib, requests
 import datetime
-import sys,time
+import sys,time,os
 import math
 import ephem
 import pygame
 import json
+
 from twilio.rest import TwilioRestClient
 from datetime import datetime, timedelta
 from spacetrack import SpaceTrackClient
@@ -126,9 +129,11 @@ def getSAT(TLE1, TLE2, Date, latitude, longitude):
         iss.compute(obs)
         sun_alt = math.degrees(sun.alt)
         obs.date = ts
-        if math.degrees(sun_alt) < 0 : ## to be fixed
+        duration = int((tr-ts)*24*60)
+        if math.degrees(sun_alt) < 0 and iss.eclipsed is False: 
             entry = {'tr': tr,
                      'ts': ts,
+                     'duration': duration,
                      'lng': iss.sublong,
                      'lat': iss.sublat}
             event.append(entry)
@@ -198,6 +203,15 @@ def viewable_Event():
 
     return List
   
+def LED():
+    os.system("echo 21 > /sys/class/gpio/export || true") # red
+    os.system("echo out > /sys/class/gpio/gpio21/direction")
+    os.system("echo 1 >/sys/class/gpio/gpio21/value")
+    time.sleep(1)
+    os.system("echo 0 >/sys/class/gpio/gpio21/value")
+    time.sleep(1)
+
+
 
 def main():
     argvparser()
@@ -220,16 +234,29 @@ def main():
         print ("\n")
         print ("cannot find 5 viewable days")
         print ("\n")
-    print ("==============Duration=====================latitude=======longitude==\n")
+    print ("=====start====================stop=========Duration(min)===latitude=======longitude==\n")
     for li in L:
-        print (li['ts'],li['tr'],'\t', li['lat'],'\t', li['lng'])
+        print (li['ts'],'\t', li['tr'], '\t', li['duration'],'\t', li['lat'],'    ', li['lng'])
     print ("\n")
 
+    while (datetime.utcnow()+timedelta(minutes=15) <= L[0]['ts'].datetime()):
+        print("waiting")
+        print( datetime.utcnow())
+        time.sleep(5)
 '''
-def main():
-    while 1:
-        now = datetime.utcnow()
-        print(now)
-        time.sleep(1)
-'''
+need minor fix on the following loop while event appears
+''' 
+
+    if(datetime.utcnow()+timedelta(minutes=15)>L[0]['ts'].datetime() and datetime.utcnow() <= L[0]['ts'].datetime()):
+        SMS = "The sat will appear at {0}".format(L[0]['ts'])
+        print (SMS)
+        # send_SMS(SMS)
+        play_music()
+        LED()
+    while(datetime.utcnow()+timedelta(minutes=15)>L[0]['ts'].datetime() and datetime.utcnow() <= L[0]['ts'].datetime()):
+        LED()
+
+        
+
 main()
+
