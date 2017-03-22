@@ -4,10 +4,12 @@ Add icu.py
 
 TODO:
 
-1. calculate angle between sun and sat + verify that viewable event works
+1. validate that getSAT() works, fix it if you can
 
-2. notification before 15 min
+2. fix the bug in main loop
 
-3. connect to notifications
+3. display the sat's data to fit validation requirement 4
+
+4. figure out if we need function sun_below()
 
 
