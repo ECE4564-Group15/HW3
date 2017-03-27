@@ -4,10 +4,6 @@
 ## Date: 3.17.2017
 ## Description:
 ##
-## TODO: 1. validate that getSAT() works, fix it if you can
-##       2. fix the bug in main loop
-##       3. display the sat's data to fit validation requirement 4
-##       4. figure out if we need function sun_below()
 # !/usr/bin/env python3
 
 import argparse
@@ -103,15 +99,6 @@ def getTLE(NORAD_ID=25544):
 
     return result
 
-
-'''
-    st = SpaceTrackClient(username,password)
-    TLE = st.tle_latest(norad_cat_id=[NoradID], ordinal=1, format='tle')
-    TLE_List = TLE.split('\n')
-    return TLE_List
-
-'''
-
 '''
 ' function: sun_below()
 ' parameter: date('2017-03-18'), latitude, longitude
@@ -153,12 +140,9 @@ def getSAT(lon, lat, date, tle):
     observer = ephem.Observer()
     observer.lat = str(lat)
     observer.long = str(lon)
-    # observer.elevation = alt
     observer.pressure = 0
     observer.horizon = '-0:34'
 
-    # now = datetime.datetime.utcnow()
-    # end_time = now + datetime.timedelta(days=1)
     now = date
     end_time = now + timedelta(days=1)
     observer.date = now
@@ -178,18 +162,6 @@ def getSAT(lon, lat, date, tle):
 
         sun_alt = degrees(sun.alt)
         visible = False
-        # oo = {
-        #     "rise_time": timegm(rise_time.timetuple()),
-        #     "rise_azimuth": degrees(azr),
-        #     "max_time": timegm(max_time.timetuple()),
-        #     "max_alt": degrees(altt),
-        #     "set_time": timegm(set_time.timetuple()),
-        #     "set_azimuth": degrees(azs),
-        #     "elevation": sat.elevation,
-        #     "sun_alt": sun_alt,
-        #     "duration": duration,
-        #     "visible": visible
-        # }
         ang = degrees(sat.az)
         oo = {'tr': tr,
                  'ts': ts,
@@ -204,39 +176,8 @@ def getSAT(lon, lat, date, tle):
             # print(oo)
             if rise_time > datetime.utcnow() and rise_time < end_time:
                 L.append(oo)
-        # else:
-            # L.append([])
-            # print("Not visible, degree of sunalt is", degrees(sun_alt), sun_alt)
-        now = set_time + timedelta(seconds=100)
         observer.date = now
     return L
-# def getSAT(TLE0, TLE1, TLE2, Date, latitude, longitude):
-#     iss = ephem.readtle(TLE0, TLE1, TLE2)
-#     obs = ephem.Observer()
-#     obs.date = Date
-#     obs.lat = latitude
-#     obs.long = longitude
-#     tr = obs.date
-#     while tr != obs.next_pass(iss)[0]:
-#         event = []
-#         tr, azr, tt, altt, ts, azs = obs.next_pass(iss)
-#         sun = ephem.Sun()
-#         sun.compute(obs)
-#         iss.compute(obs)
-#         sun_alt = math.degrees(sun.alt)
-#         ang = math.degrees(iss.az)
-#         obs.date = ts
-#         duration = int((tr - ts) * 24 * 60)
-#         if math.degrees(sun_alt) < 0 and iss.eclipsed is False:
-#             entry = {'tr': tr,
-#                      'ts': ts,
-#                      'duration': duration,
-#                      'angle': ang,
-#                      'lng': iss.sublong,
-#                      'lat': iss.sublat}
-#             event.append(entry)
-#     return event
-
 
 '''
 ' function: getWeather()
@@ -316,28 +257,6 @@ def viewable_Event():
             break
 
     return List
-# def viewable_Event():
-#     TLE = []
-#     List = []
-#     T0 = getUTCTime()
-#     vis = 0  # count clear sky day.
-#     latitude, longitude = zip2cood(arg.zipcode)
-#     norad = arg.NORAD[0]
-#     TLE = getTLE(norad)
-#     wea = getWeather(latitude, longitude)
-#
-#     for i in range(0, 14):
-#         event = getSAT(TLE[0], TLE[1], TLE[2], T0 + timedelta(days=i), latitude, longitude)
-#         if wea[i] < 20:
-#             for j in range(len(event)):
-#                 vis += 1
-#                 List.append(event[j])
-#         if vis == 5:
-#             return List
-#             break
-#
-#     return List
-
 
 def LED():
     os.system("echo 21 > /sys/class/gpio/export || true")  # red
@@ -407,7 +326,7 @@ def main():
             SMS = "The sat will appear at {0}".format(L[0]['tr'])
             print(SMS)
             audio_notification(SMS, "notify1.mp3")
-            # send_SMS(SMS) # uncomment before submit and for final test
+            send_SMS(SMS) # uncomment before submit and for final test
             LED()
         while (datetime.utcnow() + timedelta(minutes=15) > L[0]['tr'].datetime() and datetime.utcnow() <= L[0][
             'tr'].datetime()):
