@@ -79,13 +79,27 @@ def zip2cood(zipcode):
 ' return: TLE list
 '''
 
-def getTLE(NoradID):
+def getTLE(Norad_ID):
+    param = {'identity' : 'xianze@vt.edu',
+             'password' : 'space_track.org!',
+             'query' : 'https://www.space-track.org/basicspacedata/query/class/tle_latest/format/json/NORAD_CAT_ID/'+ Norad_ID + '/ORDINAL/1/'
+            }
+
+    result = requests.post('https://www.space-track.org/ajaxauth/login', data=param).json()[0]
+    try:
+        result = [result['TLE_LINE0'], result['TLE_LINE1'], result['TLE_LINE2']]
+    except KeyError:
+        print("Unable to retrieve TLE data for the given NORAD ID")
+        quit()
+
+    return result
+'''
     st = SpaceTrackClient(username,password)
-    TLE = st.tle_latest(norad_cat_id=[25544], ordinal=1, format='tle')
+    TLE = st.tle_latest(norad_cat_id=[NoradID], ordinal=1, format='tle')
     TLE_List = TLE.split('\n')
     return TLE_List
 
-
+'''
 
 
 '''
@@ -108,14 +122,14 @@ def sun_below(day, lati, longi):
 
 '''
 ' function: getSAT()
-' parameter: TLE1, TLE2, date('2017-03-18'), latitude, longitude
+' parameter: TLE0, TLE1, TLE2, date('2017-03-18'), latitude, longitude
 ' return: TR list, TS list
 '         TR is appearing time
 '         TS is disappearing time
 '''
 
-def getSAT(TLE1, TLE2, Date, latitude, longitude):
-    iss = ephem.readtle("ISS (ZARYA)", TLE1, TLE2)
+def getSAT(TLE0, TLE1, TLE2, Date, latitude, longitude):
+    iss = ephem.readtle(TLE0, TLE1, TLE2)
     obs = ephem.Observer()
     obs.date = Date
     obs.lat = latitude
@@ -188,11 +202,12 @@ def viewable_Event():
     T0 = getUTCTime()
     vis = 0 # count clear sky day.
     latitude, longitude = zip2cood(arg.zipcode)
-    TLE = getTLE(arg.NORAD)
+    norad = arg.NORAD[0]
+    TLE = getTLE(norad)
     wea = getWeather(latitude,longitude)
 
     for i in range (0,14):
-        event = getSAT(TLE[0],TLE[1],T0+timedelta(days=i),latitude, longitude)
+        event = getSAT(TLE[0],TLE[1],TLE[2],T0+timedelta(days=i),latitude, longitude)
         if wea[i] <20:
             for j in range(len(event)):
                 vis +=1
@@ -219,12 +234,12 @@ def main():
     print ("starting...")
     L = viewable_Event()
     latitude, longitude = zip2cood(arg.zipcode)
-    TLE = getTLE(arg.NORAD)
+    TLE = getTLE(arg.NORAD[0])
     wea = getWeather(latitude,longitude)
     print ("---------------------------------TLE---------------------------------\n")
-
     print(TLE[0])
-    print(TLE[1], "\n")
+    print(TLE[1],)
+    print(TLE[2], "\n")
     print ("------------------------------coordinate-----------------------------\n")
     print ("latitude: ", latitude, "longitude: ", longitude, "\n")
     print ("----------------------------sky condition----------------------------\n") 
@@ -239,14 +254,11 @@ def main():
         print (li['ts'],'\t', li['tr'], '\t', li['duration'],'\t', li['lat'],'    ', li['lng'])
     print ("\n")
 
+
     while (datetime.utcnow()+timedelta(minutes=15) <= L[0]['ts'].datetime()):
         print("waiting")
         print( datetime.utcnow())
         time.sleep(5)
-'''
-need minor fix on the following loop while event appears
-''' 
-
     if(datetime.utcnow()+timedelta(minutes=15)>L[0]['ts'].datetime() and datetime.utcnow() <= L[0]['ts'].datetime()):
         SMS = "The sat will appear at {0}".format(L[0]['ts'])
         print (SMS)
@@ -256,7 +268,6 @@ need minor fix on the following loop while event appears
     while(datetime.utcnow()+timedelta(minutes=15)>L[0]['ts'].datetime() and datetime.utcnow() <= L[0]['ts'].datetime()):
         LED()
 
-        
+
 
 main()
-
