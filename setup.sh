@@ -17,3 +17,4 @@ sudo pip3 install ephem
 sudo pip3 install twilio
 sudo pip3 install pygame
 sudo pip3 install spacetrack
+sudo pip3 install gtts

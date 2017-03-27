@@ -19,6 +19,7 @@ import math
 import ephem
 import pygame
 import json
+from gtts import gTTS
 
 from twilio.rest import TwilioRestClient
 from datetime import datetime, timedelta
@@ -79,7 +80,7 @@ def zip2cood(zipcode):
 ' return: TLE list
 '''
 
-def getTLE(Norad_ID):
+def getTLE(Norad_ID=25544):
     param = {'identity' : 'xianze@vt.edu',
              'password' : 'space_track.org!',
              'query' : 'https://www.space-track.org/basicspacedata/query/class/tle_latest/format/json/NORAD_CAT_ID/'+ Norad_ID + '/ORDINAL/1/'
@@ -142,12 +143,14 @@ def getSAT(TLE0, TLE1, TLE2, Date, latitude, longitude):
         sun.compute(obs)
         iss.compute(obs)
         sun_alt = math.degrees(sun.alt)
+        ang = math.degrees(iss.az)
         obs.date = ts
         duration = int((tr-ts)*24*60)
         if math.degrees(sun_alt) < 0 and iss.eclipsed is False: 
             entry = {'tr': tr,
                      'ts': ts,
                      'duration': duration,
+                     'angle': ang, 
                      'lng': iss.sublong,
                      'lat': iss.sublat}
             event.append(entry)
@@ -185,9 +188,9 @@ def send_SMS(_SMS_):
 '       and music dir
 '''
 
-def play_music():
+def play_music(filename):
     pygame.init()
-    pygame.mixer.music.load("/usr/share/sounds/ubuntu/ringtones/Soul.ogg")
+    pygame.mixer.music.load(filename)
     pygame.mixer.music.play()
     time.sleep(10)
 '''
@@ -227,6 +230,21 @@ def LED():
     time.sleep(1)
 
 
+def audio_notification(sentence, filename):
+    tts = gTTS(text=sentence, lang='en')
+    tts.save(filename)
+    play_music(filename)
+
+def current_status(TLE):
+    name = TLE[0]
+    line1 = TLE[1]
+    line2 = TLE[2]
+    obs = ephem.Observer()
+    obs.date = datetime.utcnow()
+    curr  = ephem.readtle(name, line1, line2)
+    curr.compute(obs)
+
+    return curr.sublong, curr.sublat, math.degrees(curr.az)
 
 def main():
     argvparser()
@@ -236,6 +254,7 @@ def main():
     latitude, longitude = zip2cood(arg.zipcode)
     TLE = getTLE(arg.NORAD[0])
     wea = getWeather(latitude,longitude)
+    cur_lng, cur_lat, cur_ang = current_status(TLE)
     print ("---------------------------------TLE---------------------------------\n")
     print(TLE[0])
     print(TLE[1],)
@@ -248,10 +267,12 @@ def main():
     if len(L) <5:
         print ("\n")
         print ("cannot find 5 viewable days")
-        print ("\n")
-    print ("=====start====================stop=========Duration(min)===latitude=======longitude==\n")
+    print ("\n")
+    print ("=====================================SAT ephpem=======================================================\n")
+    print ("longitude: {0}, latitude: {1}, travel direction: {2}".format(cur_lng, cur_lat, cur_ang))
+    print ("=====start====================stop=========Duration(min)===latitude=======longitude====direction======\n")
     for li in L:
-        print (li['ts'],'\t', li['tr'], '\t', li['duration'],'\t', li['lat'],'    ', li['lng'])
+        print (li['ts'],'\t', li['tr'], '\t', li['duration'],'\t', li['lat'],'    ', li['lng'], li['angle'])
     print ("\n")
 
 
@@ -262,8 +283,8 @@ def main():
     if(datetime.utcnow()+timedelta(minutes=15)>L[0]['ts'].datetime() and datetime.utcnow() <= L[0]['ts'].datetime()):
         SMS = "The sat will appear at {0}".format(L[0]['ts'])
         print (SMS)
-        # send_SMS(SMS)
-        play_music()
+        audio_notification(SMS, "notify1.mp3")
+        # send_SMS(SMS) # uncomment before submit and for final test
         LED()
     while(datetime.utcnow()+timedelta(minutes=15)>L[0]['ts'].datetime() and datetime.utcnow() <= L[0]['ts'].datetime()):
         LED()
