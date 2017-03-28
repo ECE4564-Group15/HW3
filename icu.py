@@ -176,6 +176,7 @@ def getSAT(lon, lat, date, tle):
             # print(oo)
             if rise_time > datetime.utcnow() and rise_time < end_time:
                 L.append(oo)
+        now = set_time + timedelta(seconds=100)
         observer.date = now
     return L
 
